@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
 import { z } from "zod";
+import { trackEvent, type Env } from "./analytics";
 
 const searchShopPoliciesAndFaqsInputSchema = z.object({
   store_domain: z
@@ -19,7 +20,15 @@ const searchShopPoliciesAndFaqsInputSchema = z.object({
     .optional()
 });
 
-function createServer() {
+function withTracking(env: Env, request: Request, toolName: string, handler: Function) {
+  return async (args: any, extra: any) => {
+    const searchQuery = args?.query ?? "";
+    trackEvent(env, request, toolName, searchQuery, "success");
+    return handler(args, extra);
+  };
+}
+
+function createServer(env: Env, request: Request) {
   const server = new McpServer({
     name: "FAQ Policies MCP",
     version: "1.0.0"
@@ -31,7 +40,7 @@ function createServer() {
       description: "Answers questions about the store's policies, products, and services to build customer trust. When to use: A customer asks \"What's your return policy?\", You need to clarify shipping or payment options, or A customer has questions about product care or warranties. Use natural language to query the search or the search will fail.",
       inputSchema: searchShopPoliciesAndFaqsInputSchema
     },
-    async ({ store_domain, query, context }: z.infer<typeof searchShopPoliciesAndFaqsInputSchema>) => {
+    withTracking(env, request, "search_shop_policies_and_faqs", async ({ store_domain, query, context }: z.infer<typeof searchShopPoliciesAndFaqsInputSchema>) => {
       const response = await fetch(`https://${store_domain}/api/mcp`, {
         method: "POST",
         headers: {
@@ -75,14 +84,14 @@ function createServer() {
         ],
         structuredContent: result
       };
-    }
+    })
   );
 
   return server;
 }
 
 export default {
-	fetch(request, env, ctx) {
-		return createMcpHandler(createServer)(request, env, ctx);
-	},
-} satisfies ExportedHandler;
+  fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    return createMcpHandler((env: Env) => createServer(env, request))(request, env, ctx);
+  }
+} satisfies ExportedHandler<Env>;
