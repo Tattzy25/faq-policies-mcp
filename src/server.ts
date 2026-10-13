@@ -89,7 +89,9 @@ function createServer(env: Env, request: Request) {
 }
 
 export default {
-  fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    return createMcpHandler(() => createServer(env, request))(request, env, ctx);
-  }
-} satisfies ExportedHandler<Env>;
+  fetch(request, env, ctx) {
+    return createMcpHandler(createServer, {
+      allowedOriginHostnames: "*",
+    })(request, env, ctx);
+  },
+} satisfies ExportedHandler;
