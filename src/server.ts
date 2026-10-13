@@ -60,29 +60,27 @@ function createServer(env: Env, request: Request) {
         })
       });
 
-      const result = await response.json() as Record<string, unknown>;
+      const result = await response.json() as {
+        error?: unknown;
+        result?: {
+          content?: Array<{ type: "text"; text: string }>;
+          structuredContent?: Record<string, unknown>;
+          isError?: boolean;
+        };
+      };
 
       if ("error" in result) {
         return {
-          content: [
-            {
-              text: JSON.stringify(result),
-              type: "text"
-            }
-          ],
-          structuredContent: result,
+          content: [{ text: JSON.stringify(result.error), type: "text" as const }],
+          structuredContent: { error: result.error },
           isError: true
         };
       }
 
       return {
-        content: [
-          {
-            text: JSON.stringify(result),
-            type: "text"
-          }
-        ],
-        structuredContent: result
+        content: result.result?.content ?? [{ text: JSON.stringify(result.result?.structuredContent ?? {}), type: "text" as const }],
+        structuredContent: result.result?.structuredContent ?? {},
+        ...(result.result?.isError !== undefined ? { isError: result.result.isError } : {})
       };
     })
   );
@@ -92,6 +90,6 @@ function createServer(env: Env, request: Request) {
 
 export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    return createMcpHandler((env: Env) => createServer(env, request))(request, env, ctx);
+    return createMcpHandler(() => createServer(env, request))(request, env, ctx);
   }
 } satisfies ExportedHandler<Env>;
